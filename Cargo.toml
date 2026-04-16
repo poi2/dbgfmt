@@ -5,6 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 description = "Pretty-print Rust Debug trait output with proper indentation"
+homepage = "https://github.com/poi2/dbgfmt"
 repository = "https://github.com/poi2/dbgfmt"
 keywords = ["debug", "pretty-print", "formatter", "cli"]
 categories = ["command-line-utilities", "development-tools"]
