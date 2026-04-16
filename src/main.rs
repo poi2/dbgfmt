@@ -9,7 +9,7 @@ fn main() {
     }
 
     if args.iter().any(|a| a == "-V" || a == "--version") {
-        println!("rust-dbg-fmt {}", env!("CARGO_PKG_VERSION"));
+        println!("dbgfmt {}", env!("CARGO_PKG_VERSION"));
         return;
     }
 
@@ -31,14 +31,14 @@ fn main() {
         std::process::exit(1);
     };
 
-    let output = rust_dbg_fmt::format_debug(input.trim(), 2);
+    let output = dbgfmt::format_debug(input.trim(), 2);
     println!("{output}");
 }
 
 fn print_usage() {
     eprintln!(
         "\
-Usage: rust-dbg-fmt [OPTIONS] [INPUT]
+Usage: dbgfmt [OPTIONS] [INPUT]
 
 Arguments:
   [INPUT]    Rust Debug format string to pretty-print. If omitted, reads from stdin.

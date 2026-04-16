@@ -2,7 +2,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 fn cargo_bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_rust-dbg-fmt"))
+    Command::new(env!("CARGO_BIN_EXE_dbgfmt"))
 }
 
 // ========================================
@@ -78,7 +78,7 @@ fn cli_version_flag() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("rust-dbg-fmt"));
+    assert!(stdout.contains("dbgfmt"));
 }
 
 #[test]

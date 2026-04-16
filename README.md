@@ -1,6 +1,7 @@
-# rust-dbg-fmt
+# dbgfmt
 
-[![CI](https://github.com/poi2/rust-dbg-fmt/actions/workflows/ci.yml/badge.svg)](https://github.com/poi2/rust-dbg-fmt/actions/workflows/ci.yml)
+[![CI](https://github.com/poi2/dbgfmt/actions/workflows/ci.yml/badge.svg)](https://github.com/poi2/dbgfmt/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/dbgfmt.svg)](https://crates.io/crates/dbgfmt)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 
 A zero-dependency Rust library and CLI tool that pretty-prints Rust `Debug` trait output with proper indentation and newlines.
@@ -35,13 +36,13 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rust-dbg-fmt = "0.1"
+dbgfmt = "0.1"
 ```
 
 Use in your code:
 
 ```rust
-use rust_dbg_fmt::format_debug;
+use dbgfmt::format_debug;
 
 let input = format!("{:?}", my_struct);
 let pretty = format_debug(&input, 2);
@@ -53,17 +54,17 @@ println!("{pretty}");
 ### Installation
 
 ```bash
-cargo install rust-dbg-fmt
+cargo install dbgfmt
 ```
 
 ### Usage
 
 ```bash
 # Pass as argument
-rust-dbg-fmt 'Foo { bar: 1, baz: [2, 3] }'
+dbgfmt 'Foo { bar: 1, baz: [2, 3] }'
 
 # Pipe from stdin
-echo 'Foo { bar: 1, baz: [2, 3] }' | rust-dbg-fmt
+echo 'Foo { bar: 1, baz: [2, 3] }' | dbgfmt
 ```
 
 ## License

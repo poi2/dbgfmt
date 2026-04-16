@@ -1,4 +1,4 @@
-use rust_dbg_fmt::format_debug;
+use dbgfmt::format_debug;
 
 // ========================================
 // Library API tests
