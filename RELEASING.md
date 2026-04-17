@@ -4,11 +4,14 @@
 
 1. Update the version in `Cargo.toml`
 2. Commit the version bump
+
    ```bash
    git add Cargo.toml
    git commit -m "chore: bump version to X.Y.Z"
    ```
+
 3. Create a tag and push
+
    ```bash
    git tag vX.Y.Z
    git push origin main --tags
