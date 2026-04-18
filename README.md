@@ -18,15 +18,15 @@ Foo { bar: 1, baz: Vec { items: [1, 2, 3] }, name: "hello" }
 
 ```text
 Foo {
-  bar: 1,
-  baz: Vec {
-    items: [
-      1,
-      2,
-      3,
-    ],
-  },
-  name: "hello",
+    bar: 1,
+    baz: Vec {
+        items: [
+            1,
+            2,
+            3,
+        ],
+    },
+    name: "hello",
 }
 ```
 
@@ -45,7 +45,7 @@ Use in your code:
 use dbgfmt::format_debug;
 
 let input = format!("{:?}", my_struct);
-let pretty = format_debug(&input, 2);
+let pretty = format_debug(&input, 4);
 println!("{pretty}");
 ```
 

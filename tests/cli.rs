@@ -22,8 +22,8 @@ fn cli_argument_input() {
         stdout.trim(),
         "\
 Foo {
-  bar: 1,
-  baz: 2,
+    bar: 1,
+    baz: 2,
 }"
     );
 }
@@ -51,8 +51,8 @@ fn cli_stdin_input() {
         stdout.trim(),
         "\
 Foo {
-  bar: 1,
-  baz: 2,
+    bar: 1,
+    baz: 2,
 }"
     );
 }
@@ -105,17 +105,95 @@ fn cli_complex_pipe() {
     assert_eq!(
         stdout.trim(),
         r#"Config {
-  server: Server {
-    host: "localhost",
-    port: 8080,
-  },
-  items: [
-    1,
-    2,
-    3,
-  ],
+    server: Server {
+        host: "localhost",
+        port: 8080,
+    },
+    items: [
+        1,
+        2,
+        3,
+    ],
 }"#
     );
+}
+
+#[test]
+fn cli_indent_option() {
+    let output = cargo_bin()
+        .args(["--indent", "4", "Foo { bar: 1 }"])
+        .output()
+        .expect("failed to execute");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.trim(),
+        "\
+Foo {
+    bar: 1,
+}"
+    );
+}
+
+#[test]
+fn cli_indent_equals_syntax() {
+    let output = cargo_bin()
+        .args(["--indent=4", "Foo { bar: 1 }"])
+        .output()
+        .expect("failed to execute");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.trim(),
+        "\
+Foo {
+    bar: 1,
+}"
+    );
+}
+
+#[test]
+fn cli_short_indent_option() {
+    let output = cargo_bin()
+        .args(["-i", "4", "Foo { bar: 1 }"])
+        .output()
+        .expect("failed to execute");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.trim(),
+        "\
+Foo {
+    bar: 1,
+}"
+    );
+}
+
+#[test]
+fn cli_color_always() {
+    let output = cargo_bin()
+        .args(["--color", "always", "Foo { bar: 1 }"])
+        .output()
+        .expect("failed to execute");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("\x1b["));
+}
+
+#[test]
+fn cli_color_never() {
+    let output = cargo_bin()
+        .args(["--color", "never", "Foo { bar: 1 }"])
+        .output()
+        .expect("failed to execute");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("\x1b["));
 }
 
 #[test]

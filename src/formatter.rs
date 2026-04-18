@@ -1,6 +1,42 @@
 use crate::tokenizer::Token;
 
+pub trait Emitter {
+    fn emit_bracket(&mut self, output: &mut String, ch: char);
+    fn emit_type_name(&mut self, output: &mut String, text: &str);
+    fn emit_key(&mut self, output: &mut String, text: &str);
+    fn emit_value(&mut self, output: &mut String, text: &str);
+    fn emit_punctuation(&mut self, output: &mut String, text: &str);
+}
+
+pub struct PlainEmitter;
+
+impl Emitter for PlainEmitter {
+    fn emit_bracket(&mut self, output: &mut String, ch: char) {
+        output.push(ch);
+    }
+    fn emit_type_name(&mut self, output: &mut String, text: &str) {
+        output.push_str(text);
+    }
+    fn emit_key(&mut self, output: &mut String, text: &str) {
+        output.push_str(text);
+    }
+    fn emit_value(&mut self, output: &mut String, text: &str) {
+        output.push_str(text);
+    }
+    fn emit_punctuation(&mut self, output: &mut String, text: &str) {
+        output.push_str(text);
+    }
+}
+
 pub fn format_tokens(tokens: &[Token], indent_width: usize) -> String {
+    format_tokens_with_emitter(tokens, indent_width, &mut PlainEmitter)
+}
+
+pub fn format_tokens_with_emitter(
+    tokens: &[Token],
+    indent_width: usize,
+    emitter: &mut dyn Emitter,
+) -> String {
     let mut output = String::new();
     let mut indent_level: usize = 0;
     let indent_unit = " ".repeat(indent_width);
@@ -33,8 +69,8 @@ pub fn format_tokens(tokens: &[Token], indent_width: usize) -> String {
                         '(' => ')',
                         _ => unreachable!(),
                     };
-                    output.push(ch);
-                    output.push(close_ch);
+                    emitter.emit_bracket(&mut output, ch);
+                    emitter.emit_bracket(&mut output, close_ch);
                     i += 2; // skip both open and close
                     continue;
                 }
@@ -43,9 +79,9 @@ pub fn format_tokens(tokens: &[Token], indent_width: usize) -> String {
                 // Keep inline as Some(42) instead of expanding to multiple lines
                 if matches!(&tokens[i], Token::OpenParen) {
                     if let Some(single) = single_paren_value(&tokens[i..]) {
-                        output.push('(');
-                        output.push_str(&single);
-                        output.push(')');
+                        emitter.emit_bracket(&mut output, '(');
+                        emitter.emit_value(&mut output, &single);
+                        emitter.emit_bracket(&mut output, ')');
                         // Skip open paren + value + optional trailing comma + close paren
                         let mut skip = 1; // skip open paren (already at i)
                         skip += 1; // skip value
@@ -58,7 +94,7 @@ pub fn format_tokens(tokens: &[Token], indent_width: usize) -> String {
                     }
                 }
 
-                output.push(ch);
+                emitter.emit_bracket(&mut output, ch);
                 indent_level += 1;
                 output.push('\n');
                 push_indent(&mut output, &indent_unit, indent_level);
@@ -77,15 +113,15 @@ pub fn format_tokens(tokens: &[Token], indent_width: usize) -> String {
                         Token::Comma | Token::OpenBrace | Token::OpenBracket | Token::OpenParen
                     )
                 {
-                    output.push(',');
+                    emitter.emit_punctuation(&mut output, ",");
                 }
                 indent_level = indent_level.saturating_sub(1);
                 output.push('\n');
                 push_indent(&mut output, &indent_unit, indent_level);
-                output.push(ch);
+                emitter.emit_bracket(&mut output, ch);
             }
             Token::Comma => {
-                output.push(',');
+                emitter.emit_punctuation(&mut output, ",");
                 // Skip newline if next token is a close delimiter (input already has trailing comma)
                 let next_is_close = i + 1 < len
                     && matches!(
@@ -98,13 +134,24 @@ pub fn format_tokens(tokens: &[Token], indent_width: usize) -> String {
                 }
             }
             Token::Colon => {
-                output.push_str(": ");
+                emitter.emit_punctuation(&mut output, ": ");
             }
             Token::Text(text) => {
-                output.push_str(text);
-                // Add space before { only (not before ( or [)
                 if i + 1 < len && matches!(tokens[i + 1], Token::OpenBrace) {
+                    // Type name (before {)
+                    emitter.emit_type_name(&mut output, text);
                     output.push(' ');
+                } else if i + 1 < len && matches!(tokens[i + 1], Token::Colon) {
+                    // Key (before :)
+                    emitter.emit_key(&mut output, text);
+                } else if i + 1 < len
+                    && matches!(tokens[i + 1], Token::OpenParen | Token::OpenBracket)
+                {
+                    // Type name (before ( or [)
+                    emitter.emit_type_name(&mut output, text);
+                } else {
+                    // Value
+                    emitter.emit_value(&mut output, text);
                 }
             }
         }
