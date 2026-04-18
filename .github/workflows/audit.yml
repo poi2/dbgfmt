@@ -5,15 +5,18 @@ on:
     - cron: '0 0 * * 1' # Weekly on Monday
   push:
     branches: [main]
-    paths: ['**/Cargo.toml', '**/Cargo.lock']
+    paths: ['**/Cargo.toml', '**/Cargo.lock', '.github/workflows/audit.yml']
   pull_request:
-    paths: ['**/Cargo.toml', '**/Cargo.lock']
+    branches: [main]
+    paths: ['**/Cargo.toml', '**/Cargo.lock', '.github/workflows/audit.yml']
 
 jobs:
   audit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2.0.0
+      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ github.token }}
