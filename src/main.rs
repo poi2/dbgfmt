@@ -50,7 +50,14 @@ fn main() {
     } else {
         dbgfmt::format_debug(input.trim(), opts.indent_width)
     };
-    println!("{output}");
+
+    match output {
+        Ok(formatted) => println!("{formatted}"),
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+    }
 }
 
 fn parse_args() -> Result<Options, String> {
