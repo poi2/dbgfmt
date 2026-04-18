@@ -55,7 +55,7 @@ fn main() {
 
 fn parse_args() -> Result<Options, String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let mut indent_width: usize = 2;
+    let mut indent_width: usize = 4;
     let mut color = ColorMode::Auto;
     let mut positional = Vec::new();
     let mut i = 0;
@@ -137,7 +137,7 @@ Arguments:
   [INPUT]    Rust Debug format string to pretty-print. If omitted, reads from stdin.
 
 Options:
-  -i, --indent <N>     Indent width (default: 2)
+  -i, --indent <N>     Indent width (default: 4)
       --color <WHEN>    Color output: auto, always, never (default: auto)
   -h, --help           Print help
   -V, --version        Print version"

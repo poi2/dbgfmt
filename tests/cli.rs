@@ -22,8 +22,8 @@ fn cli_argument_input() {
         stdout.trim(),
         "\
 Foo {
-  bar: 1,
-  baz: 2,
+    bar: 1,
+    baz: 2,
 }"
     );
 }
@@ -51,8 +51,8 @@ fn cli_stdin_input() {
         stdout.trim(),
         "\
 Foo {
-  bar: 1,
-  baz: 2,
+    bar: 1,
+    baz: 2,
 }"
     );
 }
@@ -105,15 +105,15 @@ fn cli_complex_pipe() {
     assert_eq!(
         stdout.trim(),
         r#"Config {
-  server: Server {
-    host: "localhost",
-    port: 8080,
-  },
-  items: [
-    1,
-    2,
-    3,
-  ],
+    server: Server {
+        host: "localhost",
+        port: 8080,
+    },
+    items: [
+        1,
+        2,
+        3,
+    ],
 }"#
     );
 }
