@@ -25,5 +25,6 @@ The [Release workflow](.github/workflows/release.yml) (powered by [cargo-dist](h
 
 - Build binaries for all target platforms (macOS, Linux, Windows)
 - Create a GitHub Release with the built artifacts
+- Publish to [crates.io](https://crates.io/crates/dbgfmt)
 - Publish the Homebrew formula to [poi2/homebrew-tap](https://github.com/poi2/homebrew-tap)
 - Generate a shell installer script
