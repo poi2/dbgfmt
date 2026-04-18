@@ -53,6 +53,20 @@ println!("{pretty}");
 
 ### Installation
 
+#### Homebrew
+
+```bash
+brew install poi2/tap/dbgfmt
+```
+
+#### Shell script
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/poi2/dbgfmt/releases/latest/download/dbgfmt-installer.sh | sh
+```
+
+#### Cargo
+
 ```bash
 cargo install dbgfmt
 ```
