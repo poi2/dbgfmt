@@ -3,18 +3,18 @@
 ## Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install) (1.85+)
-- [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2)
-- [prek](https://github.com/j178/prek)
+- [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2) — `npm install -g markdownlint-cli2`
+- [prek](https://github.com/j178/prek) — `cargo install prek`
 
 ## Setup
 
+Clone your fork or the repository, then install the pre-commit hooks:
+
 ```bash
-git clone https://github.com/poi2/dbgfmt.git
-cd dbgfmt
 prek install
 ```
 
-This installs pre-commit hooks that run the same checks as CI:
+This runs the same checks as CI on every commit:
 
 - Markdown Lint
 - `cargo fmt --all --check`
