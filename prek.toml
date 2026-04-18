@@ -1,0 +1,30 @@
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "markdownlint"
+name = "Markdown Lint"
+language = "system"
+entry = "markdownlint-cli2"
+types = ["markdown"]
+
+[[repos.hooks]]
+id = "cargo-fmt"
+name = "Format"
+language = "system"
+entry = "cargo fmt --all --check"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "cargo-clippy"
+name = "Clippy"
+language = "system"
+entry = "cargo clippy --all-targets -- -D warnings"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "cargo-test"
+name = "Test"
+language = "system"
+entry = "cargo test --all-targets"
+pass_filenames = false
