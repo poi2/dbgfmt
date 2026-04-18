@@ -62,6 +62,14 @@ fn parse_args() -> Result<Options, String> {
 
     while i < args.len() {
         match args[i].as_str() {
+            "--" => {
+                i += 1;
+                while i < args.len() {
+                    positional.push(args[i].clone());
+                    i += 1;
+                }
+                break;
+            }
             "-h" | "--help" => {
                 print_usage();
                 std::process::exit(0);
@@ -73,42 +81,20 @@ fn parse_args() -> Result<Options, String> {
             "-i" | "--indent" => {
                 i += 1;
                 let val = args.get(i).ok_or("--indent requires a value")?;
-                indent_width = val
-                    .parse()
-                    .map_err(|_| format!("invalid indent value: {val}"))?;
+                indent_width = parse_indent(val)?;
             }
             "--color" => {
                 i += 1;
                 let val = args.get(i).ok_or("--color requires a value")?;
-                color = match val.as_str() {
-                    "auto" => ColorMode::Auto,
-                    "always" => ColorMode::Always,
-                    "never" => ColorMode::Never,
-                    _ => {
-                        return Err(format!(
-                            "invalid color value: {val} (expected auto, always, never)"
-                        ));
-                    }
-                };
+                color = parse_color(val)?;
             }
             arg if arg.starts_with("--indent=") => {
                 let val = &arg["--indent=".len()..];
-                indent_width = val
-                    .parse()
-                    .map_err(|_| format!("invalid indent value: {val}"))?;
+                indent_width = parse_indent(val)?;
             }
             arg if arg.starts_with("--color=") => {
                 let val = &arg["--color=".len()..];
-                color = match val {
-                    "auto" => ColorMode::Auto,
-                    "always" => ColorMode::Always,
-                    "never" => ColorMode::Never,
-                    _ => {
-                        return Err(format!(
-                            "invalid color value: {val} (expected auto, always, never)"
-                        ));
-                    }
-                };
+                color = parse_color(val)?;
             }
             _ => positional.push(args[i].clone()),
         }
@@ -126,6 +112,29 @@ fn parse_args() -> Result<Options, String> {
         color,
         input,
     })
+}
+
+const MAX_INDENT: usize = 32;
+
+fn parse_indent(val: &str) -> Result<usize, String> {
+    let n: usize = val
+        .parse()
+        .map_err(|_| format!("invalid indent value: {val}"))?;
+    if n > MAX_INDENT {
+        return Err(format!("indent value too large: {n} (max: {MAX_INDENT})"));
+    }
+    Ok(n)
+}
+
+fn parse_color(val: &str) -> Result<ColorMode, String> {
+    match val {
+        "auto" => Ok(ColorMode::Auto),
+        "always" => Ok(ColorMode::Always),
+        "never" => Ok(ColorMode::Never),
+        _ => Err(format!(
+            "invalid color value: {val} (expected auto, always, never)"
+        )),
+    }
 }
 
 fn print_usage() {
