@@ -45,7 +45,7 @@ Use in your code:
 use dbgfmt::format_debug;
 
 let input = format!("{:?}", my_struct);
-let pretty = format_debug(&input, 4);
+let pretty = format_debug(&input, 4).unwrap();
 println!("{pretty}");
 ```
 
@@ -79,6 +79,12 @@ dbgfmt 'Foo { bar: 1, baz: [2, 3] }'
 
 # Pipe from stdin
 echo 'Foo { bar: 1, baz: [2, 3] }' | dbgfmt
+
+# Format dbg!() macro output (prefix is preserved)
+echo '[src/main.rs:5:5] config = Config { host: "localhost", port: 8080 }' | dbgfmt
+
+# Multiple values (separate lines or same line)
+printf 'Foo { x: 1 }\nBar { y: 2 }' | dbgfmt
 ```
 
 ## License
