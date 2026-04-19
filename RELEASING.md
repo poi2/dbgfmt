@@ -3,18 +3,14 @@
 ## Steps
 
 1. Update the version in `Cargo.toml`
-2. Commit the version bump
+2. Update `CHANGELOG.md`: move `[Unreleased]` entries to `[X.Y.Z] - YYYY-MM-DD` and update links
+3. Create a PR, get it merged into main
+4. Create a tag and push
 
    ```bash
-   git add Cargo.toml
-   git commit -m "chore: bump version to X.Y.Z"
-   ```
-
-3. Create a tag and push
-
-   ```bash
+   git checkout main && git pull
    git tag vX.Y.Z
-   git push origin main --tags
+   git push origin --tags
    ```
 
 Alternatively, you can create a release with a tag from the GitHub UI.
