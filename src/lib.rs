@@ -45,7 +45,8 @@ fn format_lines(input: &str, indent_width: usize, colored: bool) -> Result<Strin
 
         let (prefix, value) = strip_dbg_prefix(trimmed);
 
-        validate_brackets(value, line_idx + 1)?;
+        let column_offset = prefix.as_ref().map_or(0, |p| p.len());
+        validate_brackets(value, line_idx + 1, column_offset)?;
 
         let tokens = tokenizer::tokenize(value);
         let groups = split_into_values(&tokens);
@@ -92,7 +93,12 @@ fn strip_dbg_prefix(line: &str) -> (Option<String>, &str) {
 }
 
 /// Validate that brackets are balanced in the input.
-fn validate_brackets(input: &str, line_num: usize) -> Result<(), FormatError> {
+/// `column_offset` adjusts reported columns when a prefix (e.g. dbg!) was stripped.
+fn validate_brackets(
+    input: &str,
+    line_num: usize,
+    column_offset: usize,
+) -> Result<(), FormatError> {
     let mut stack: Vec<(char, usize)> = Vec::new();
     let mut chars = input.char_indices().peekable();
 
@@ -116,7 +122,7 @@ fn validate_brackets(input: &str, line_num: usize) -> Result<(), FormatError> {
                     }
                 }
             }
-            '{' | '[' | '(' => stack.push((ch, col + 1)),
+            '{' | '[' | '(' => stack.push((ch, column_offset + col + 1)),
             '}' | ']' | ')' => {
                 let expected = match ch {
                     '}' => '{',
@@ -128,7 +134,7 @@ fn validate_brackets(input: &str, line_num: usize) -> Result<(), FormatError> {
                     None => {
                         return Err(FormatError {
                             line: line_num,
-                            column: col + 1,
+                            column: column_offset + col + 1,
                             message: format!("unexpected '{ch}'"),
                         });
                     }
@@ -136,7 +142,7 @@ fn validate_brackets(input: &str, line_num: usize) -> Result<(), FormatError> {
                         if open != expected {
                             return Err(FormatError {
                                 line: line_num,
-                                column: col + 1,
+                                column: column_offset + col + 1,
                                 message: format!(
                                     "mismatched bracket: expected '{}' to close '{open}' (column {open_col}), found '{ch}'",
                                     match open {
@@ -177,6 +183,11 @@ fn split_into_values(tokens: &[Token]) -> Vec<Vec<Token>> {
     let mut depth: usize = 0;
 
     for (i, token) in tokens.iter().enumerate() {
+        // Skip top-level commas between values
+        if depth == 0 && matches!(token, Token::Comma) {
+            continue;
+        }
+
         current.push(token.clone());
 
         match token {
@@ -347,5 +358,21 @@ mod tests {
             output,
             "[src/main.rs:5:5] items = [\n    1,\n    2,\n    3,\n]"
         );
+    }
+
+    #[test]
+    fn error_column_offset_with_dbg_prefix() {
+        // "[src/main.rs:5:5] x = " is 22 chars, then "Foo { bar: 1" has unclosed '{' at position 5
+        let err = format_debug("[src/main.rs:5:5] x = Foo { bar: 1", 4).unwrap_err();
+        assert_eq!(err.line, 1);
+        assert_eq!(err.column, 27); // 22 (prefix) + 5 ('{' position in value)
+        assert!(err.message.contains("unclosed"));
+    }
+
+    #[test]
+    fn multi_value_with_comma_separator() {
+        let input = "Foo { x: 1 }, Bar { y: 2 }";
+        let output = format_debug(input, 4).unwrap();
+        assert_eq!(output, "Foo {\n    x: 1,\n}\nBar {\n    y: 2,\n}");
     }
 }
