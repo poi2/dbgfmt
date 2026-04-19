@@ -17,6 +17,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
-        with:
-          token: ${{ github.token }}
+      - name: Install cargo-audit
+        run: |
+          curl -sSL https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.1/cargo-audit-x86_64-unknown-linux-gnu-v0.22.1.tgz | tar xz -C /usr/local/bin
+      - name: Run audit
+        run: cargo audit
