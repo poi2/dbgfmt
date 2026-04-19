@@ -29,7 +29,7 @@ fn complex_nested_struct() {
     "metrics",
   ],
 }"#;
-    assert_eq!(format_debug(input, 2).unwrap(), expected);
+    assert_eq!(format_debug(input, 2), expected);
 }
 
 #[test]
@@ -50,7 +50,7 @@ Matrix {
     ],
   ],
 }";
-    assert_eq!(format_debug(input, 2).unwrap(), expected);
+    assert_eq!(format_debug(input, 2), expected);
 }
 
 #[test]
@@ -66,22 +66,22 @@ Result {
     },
   ),
 }";
-    assert_eq!(format_debug(input, 2).unwrap(), expected);
+    assert_eq!(format_debug(input, 2), expected);
 }
 
 #[test]
 fn empty_input() {
-    assert_eq!(format_debug("", 2).unwrap(), "");
+    assert_eq!(format_debug("", 2), "");
 }
 
 #[test]
 fn single_value() {
-    assert_eq!(format_debug("42", 2).unwrap(), "42");
+    assert_eq!(format_debug("42", 2), "42");
 }
 
 #[test]
 fn unit_variant() {
-    assert_eq!(format_debug("None", 2).unwrap(), "None");
+    assert_eq!(format_debug("None", 2), "None");
 }
 
 #[test]
@@ -93,14 +93,14 @@ Point(
   2,
   3,
 )";
-    assert_eq!(format_debug(input, 2).unwrap(), expected);
+    assert_eq!(format_debug(input, 2), expected);
 }
 
 #[test]
 fn string_with_special_chars() {
     let input = r#"Foo { msg: "hello \"world\" {test} [arr]" }"#;
     let expected = "Foo {\n  msg: \"hello \\\"world\\\" {test} [arr]\",\n}";
-    assert_eq!(format_debug(input, 2).unwrap(), expected);
+    assert_eq!(format_debug(input, 2), expected);
 }
 
 #[test]
@@ -111,7 +111,7 @@ Foo {
     bar: 1,
     baz: 2,
 }";
-    assert_eq!(format_debug(input, 4).unwrap(), expected);
+    assert_eq!(format_debug(input, 4), expected);
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn lib_used_in_app_context() {
     };
 
     let debug_str = format!("{:?}", user);
-    let pretty = format_debug(&debug_str, 2).unwrap();
+    let pretty = format_debug(&debug_str, 2);
 
     assert!(pretty.contains("name:"));
     assert!(pretty.contains("age:"));
@@ -148,7 +148,7 @@ fn hashmap_output() {
   1: \"a\",
   2: \"b\",
 }";
-    assert_eq!(format_debug(input, 2).unwrap(), expected);
+    assert_eq!(format_debug(input, 2), expected);
 }
 
 #[test]
@@ -160,7 +160,7 @@ fn hashset_output() {
   2,
   3,
 }";
-    assert_eq!(format_debug(input, 2).unwrap(), expected);
+    assert_eq!(format_debug(input, 2), expected);
 }
 
 #[test]
@@ -171,11 +171,11 @@ Server {
   addr: 127.0.0.1:8080,
   name: \"web\",
 }";
-    assert_eq!(format_debug(input, 2).unwrap(), expected);
+    assert_eq!(format_debug(input, 2), expected);
 }
 
 #[test]
 fn single_value_enum_inline() {
-    assert_eq!(format_debug("Some(42)", 2).unwrap(), "Some(42)");
-    assert_eq!(format_debug("Ok(\"hello\")", 2).unwrap(), "Ok(\"hello\")");
+    assert_eq!(format_debug("Some(42)", 2), "Some(42)");
+    assert_eq!(format_debug("Ok(\"hello\")", 2), "Ok(\"hello\")");
 }

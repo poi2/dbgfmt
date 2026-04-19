@@ -1,4 +1,7 @@
+use std::fmt;
 use std::io::{self, IsTerminal, Read};
+
+use dbgfmt::Token;
 
 struct Options {
     indent_width: usize,
@@ -10,6 +13,23 @@ enum ColorMode {
     Auto,
     Always,
     Never,
+}
+
+#[derive(Debug)]
+struct FormatError {
+    line: usize,
+    column: usize,
+    message: String,
+}
+
+impl fmt::Display for FormatError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "line {}, column {}: {}",
+            self.line, self.column, self.message
+        )
+    }
 }
 
 fn main() {
@@ -45,19 +65,204 @@ fn main() {
         ColorMode::Auto => io::stdout().is_terminal(),
     };
 
-    let output = if use_color {
-        dbgfmt::format_debug_colored(input.trim(), opts.indent_width)
-    } else {
-        dbgfmt::format_debug(input.trim(), opts.indent_width)
-    };
-
-    match output {
-        Ok(formatted) => println!("{formatted}"),
+    match format_cli_input(input.trim(), opts.indent_width, use_color) {
+        Ok(output) => println!("{output}"),
         Err(e) => {
             eprintln!("error: {e}");
             std::process::exit(1);
         }
     }
+}
+
+/// CLI-specific formatting: handles multi-line input, dbg! prefix stripping,
+/// bracket validation, and multi-value splitting.
+fn format_cli_input(
+    input: &str,
+    indent_width: usize,
+    colored: bool,
+) -> Result<String, FormatError> {
+    let mut results = Vec::new();
+
+    for (line_idx, line) in input.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let (prefix, value) = strip_dbg_prefix(trimmed);
+
+        let column_offset = prefix.as_ref().map_or(0, |p| p.len());
+        validate_brackets(value, line_idx + 1, column_offset)?;
+
+        let tokens = dbgfmt::tokenize(value);
+        let groups = split_into_values(&tokens);
+
+        for group in &groups {
+            let formatted = if colored {
+                dbgfmt::format_tokens_colored(group, indent_width)
+            } else {
+                dbgfmt::format_tokens(group, indent_width)
+            };
+
+            if let Some(ref p) = prefix {
+                results.push(format!("{p}{formatted}"));
+            } else {
+                results.push(formatted);
+            }
+        }
+    }
+
+    Ok(results.join("\n"))
+}
+
+/// Strip `[file:line:col] expr = ` prefix from `dbg!()` output.
+fn strip_dbg_prefix(line: &str) -> (Option<String>, &str) {
+    if !line.starts_with('[') {
+        return (None, line);
+    }
+
+    let bracket_end = match line.find("] ") {
+        Some(i) => i + 2,
+        None => return (None, line),
+    };
+
+    let rest = &line[bracket_end..];
+    let eq_pos = match rest.find(" = ") {
+        Some(i) => bracket_end + i + 3,
+        None => return (None, line),
+    };
+
+    let prefix = &line[..eq_pos];
+    let value = &line[eq_pos..];
+
+    (Some(prefix.to_string()), value)
+}
+
+/// Validate that brackets are balanced in the input.
+fn validate_brackets(
+    input: &str,
+    line_num: usize,
+    column_offset: usize,
+) -> Result<(), FormatError> {
+    let mut stack: Vec<(char, usize)> = Vec::new();
+    let mut chars = input.char_indices().peekable();
+
+    while let Some((col, ch)) = chars.next() {
+        match ch {
+            '"' => {
+                while let Some((_, c)) = chars.next() {
+                    if c == '\\' {
+                        chars.next();
+                    } else if c == '"' {
+                        break;
+                    }
+                }
+            }
+            '\'' => {
+                while let Some((_, c)) = chars.next() {
+                    if c == '\\' {
+                        chars.next();
+                    } else if c == '\'' {
+                        break;
+                    }
+                }
+            }
+            '{' | '[' | '(' => stack.push((ch, column_offset + col + 1)),
+            '}' | ']' | ')' => {
+                let expected = match ch {
+                    '}' => '{',
+                    ']' => '[',
+                    ')' => '(',
+                    _ => unreachable!(),
+                };
+                match stack.pop() {
+                    None => {
+                        return Err(FormatError {
+                            line: line_num,
+                            column: column_offset + col + 1,
+                            message: format!("unexpected '{ch}'"),
+                        });
+                    }
+                    Some((open, open_col)) => {
+                        if open != expected {
+                            return Err(FormatError {
+                                line: line_num,
+                                column: column_offset + col + 1,
+                                message: format!(
+                                    "mismatched bracket: expected '{}' to close '{open}' (column {open_col}), found '{ch}'",
+                                    match open {
+                                        '{' => '}',
+                                        '[' => ']',
+                                        '(' => ')',
+                                        _ => unreachable!(),
+                                    }
+                                ),
+                            });
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if let Some((ch, col)) = stack.last() {
+        return Err(FormatError {
+            line: line_num,
+            column: *col,
+            message: format!("unclosed '{ch}'"),
+        });
+    }
+
+    Ok(())
+}
+
+/// Split a token stream into separate values based on nesting depth.
+fn split_into_values(tokens: &[Token]) -> Vec<Vec<Token>> {
+    if tokens.is_empty() {
+        return vec![];
+    }
+
+    let mut groups: Vec<Vec<Token>> = Vec::new();
+    let mut current: Vec<Token> = Vec::new();
+    let mut depth: usize = 0;
+
+    for (i, token) in tokens.iter().enumerate() {
+        // Skip top-level commas between values
+        if depth == 0 && matches!(token, Token::Comma) {
+            continue;
+        }
+
+        current.push(token.clone());
+
+        match token {
+            Token::OpenBrace | Token::OpenBracket | Token::OpenParen => {
+                depth += 1;
+            }
+            Token::CloseBrace | Token::CloseBracket | Token::CloseParen => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    groups.push(std::mem::take(&mut current));
+                }
+            }
+            Token::Text(_) if depth == 0 => {
+                // Check if next token is an opener — if so, this text is a type name
+                let next_is_opener = tokens.get(i + 1).is_some_and(|t| {
+                    matches!(t, Token::OpenBrace | Token::OpenBracket | Token::OpenParen)
+                });
+                if !next_is_opener {
+                    groups.push(std::mem::take(&mut current));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if !current.is_empty() {
+        groups.push(current);
+    }
+
+    groups
 }
 
 fn parse_args() -> Result<Options, String> {
@@ -158,4 +363,152 @@ Options:
   -h, --help           Print help
   -V, --version        Print version"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // === dbg! prefix tests ===
+
+    #[test]
+    fn strip_dbg_prefix_basic() {
+        let (prefix, value) = strip_dbg_prefix("[src/main.rs:5:5] my_struct = Foo { bar: 1 }");
+        assert_eq!(prefix.unwrap(), "[src/main.rs:5:5] my_struct = ");
+        assert_eq!(value, "Foo { bar: 1 }");
+    }
+
+    #[test]
+    fn strip_dbg_prefix_no_prefix() {
+        let (prefix, value) = strip_dbg_prefix("Foo { bar: 1 }");
+        assert!(prefix.is_none());
+        assert_eq!(value, "Foo { bar: 1 }");
+    }
+
+    #[test]
+    fn strip_dbg_prefix_not_dbg() {
+        let (prefix, value) = strip_dbg_prefix("[1, 2, 3]");
+        assert!(prefix.is_none());
+        assert_eq!(value, "[1, 2, 3]");
+    }
+
+    #[test]
+    fn format_dbg_output() {
+        let input = "[src/main.rs:5:5] my_struct = Foo { bar: 1, baz: 2 }";
+        let output = format_cli_input(input, 4, false).unwrap();
+        assert_eq!(
+            output,
+            "[src/main.rs:5:5] my_struct = Foo {\n    bar: 1,\n    baz: 2,\n}"
+        );
+    }
+
+    #[test]
+    fn format_multiple_dbg_lines() {
+        let input = "[src/main.rs:5:5] x = Foo { a: 1 }\n[src/main.rs:6:5] y = Bar { b: 2 }";
+        let output = format_cli_input(input, 4, false).unwrap();
+        assert_eq!(
+            output,
+            "[src/main.rs:5:5] x = Foo {\n    a: 1,\n}\n[src/main.rs:6:5] y = Bar {\n    b: 2,\n}"
+        );
+    }
+
+    #[test]
+    fn dbg_prefix_with_array() {
+        let input = "[src/main.rs:5:5] items = [1, 2, 3]";
+        let output = format_cli_input(input, 4, false).unwrap();
+        assert_eq!(
+            output,
+            "[src/main.rs:5:5] items = [\n    1,\n    2,\n    3,\n]"
+        );
+    }
+
+    // === multi-value tests ===
+
+    #[test]
+    fn multi_value_same_line() {
+        let input = "Foo { x: 1 } Bar { y: 2 }";
+        let output = format_cli_input(input, 4, false).unwrap();
+        assert_eq!(output, "Foo {\n    x: 1,\n}\nBar {\n    y: 2,\n}");
+    }
+
+    #[test]
+    fn multi_value_separate_lines() {
+        let input = "Foo { x: 1 }\nBar { y: 2 }";
+        let output = format_cli_input(input, 4, false).unwrap();
+        assert_eq!(output, "Foo {\n    x: 1,\n}\nBar {\n    y: 2,\n}");
+    }
+
+    #[test]
+    fn multi_value_bare_values() {
+        let input = "42\nNone\n\"hello\"";
+        let output = format_cli_input(input, 4, false).unwrap();
+        assert_eq!(output, "42\nNone\n\"hello\"");
+    }
+
+    #[test]
+    fn multi_value_bare_same_line() {
+        let input = "Some(42) None";
+        let output = format_cli_input(input, 4, false).unwrap();
+        assert_eq!(output, "Some(42)\nNone");
+    }
+
+    #[test]
+    fn multi_value_with_comma_separator() {
+        let input = "Foo { x: 1 }, Bar { y: 2 }";
+        let output = format_cli_input(input, 4, false).unwrap();
+        assert_eq!(output, "Foo {\n    x: 1,\n}\nBar {\n    y: 2,\n}");
+    }
+
+    // === bracket validation tests ===
+
+    #[test]
+    fn error_unclosed_brace() {
+        let err = format_cli_input("Foo { bar: 1", 4, false).unwrap_err();
+        assert_eq!(err.line, 1);
+        assert_eq!(err.column, 5);
+        assert!(err.message.contains("unclosed"));
+    }
+
+    #[test]
+    fn error_unexpected_close() {
+        let err = format_cli_input("Foo } bar", 4, false).unwrap_err();
+        assert_eq!(err.line, 1);
+        assert_eq!(err.column, 5);
+        assert!(err.message.contains("unexpected"));
+    }
+
+    #[test]
+    fn error_mismatched_brackets() {
+        let err = format_cli_input("Foo { bar: 1 )", 4, false).unwrap_err();
+        assert_eq!(err.line, 1);
+        assert_eq!(err.column, 14);
+        assert!(err.message.contains("mismatched"));
+    }
+
+    #[test]
+    fn error_on_second_line() {
+        let err = format_cli_input("Foo { x: 1 }\nBar { y: 2", 4, false).unwrap_err();
+        assert_eq!(err.line, 2);
+        assert!(err.message.contains("unclosed"));
+    }
+
+    #[test]
+    fn error_column_offset_with_dbg_prefix() {
+        let err = format_cli_input("[src/main.rs:5:5] x = Foo { bar: 1", 4, false).unwrap_err();
+        assert_eq!(err.line, 1);
+        assert_eq!(err.column, 27);
+        assert!(err.message.contains("unclosed"));
+    }
+
+    #[test]
+    fn empty_input() {
+        assert_eq!(format_cli_input("", 4, false).unwrap(), "");
+    }
+
+    #[test]
+    fn blank_lines_skipped() {
+        let input = "Foo { x: 1 }\n\n\nBar { y: 2 }";
+        let output = format_cli_input(input, 4, false).unwrap();
+        assert_eq!(output, "Foo {\n    x: 1,\n}\nBar {\n    y: 2,\n}");
+    }
 }
