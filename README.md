@@ -45,7 +45,7 @@ Use in your code:
 use dbgfmt::format_debug;
 
 let input = format!("{:?}", my_struct);
-let pretty = format_debug(&input, 4).unwrap();
+let pretty = format_debug(&input, 4);
 println!("{pretty}");
 ```
 
