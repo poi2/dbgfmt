@@ -78,6 +78,8 @@ fn main() {
 
 /// CLI-specific formatting: handles multi-line input, dbg! prefix stripping,
 /// bracket validation, and multi-value splitting.
+/// When `recover` is enabled, bracket validation is skipped and broken
+/// bracket structure is best-effort repaired before formatting.
 fn format_cli_input(
     input: &str,
     indent_width: usize,
