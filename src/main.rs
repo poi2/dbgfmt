@@ -65,7 +65,7 @@ fn main() {
         ColorMode::Auto => io::stdout().is_terminal(),
     };
 
-    match format_cli_input(input.trim(), opts.indent_width, use_color) {
+    match format_cli_input(input.trim_end(), opts.indent_width, use_color) {
         Ok(output) => println!("{output}"),
         Err(e) => {
             eprintln!("error: {e}");
@@ -116,19 +116,22 @@ fn format_cli_input(
 }
 
 /// Strip `[file:line:col] expr = ` prefix from `dbg!()` output.
+/// Handles leading whitespace (e.g. indented log output).
 fn strip_dbg_prefix(line: &str) -> (Option<String>, &str) {
-    if !line.starts_with('[') {
+    let trimmed = line.trim_start();
+    if !trimmed.starts_with('[') {
         return (None, line);
     }
 
-    let bracket_end = match line.find("] ") {
+    let leading_ws = line.len() - trimmed.len();
+    let bracket_end = match trimmed.find("] ") {
         Some(i) => i + 2,
         None => return (None, line),
     };
 
-    let rest = &line[bracket_end..];
+    let rest = &trimmed[bracket_end..];
     let eq_pos = match rest.find(" = ") {
-        Some(i) => bracket_end + i + 3,
+        Some(i) => leading_ws + bracket_end + i + 3,
         None => return (None, line),
     };
 
