@@ -6,6 +6,7 @@ use dbgfmt::Token;
 struct Options {
     indent_width: usize,
     color: ColorMode,
+    recover: bool,
     input: Option<String>,
 }
 
@@ -65,10 +66,11 @@ fn main() {
         ColorMode::Auto => io::stdout().is_terminal(),
     };
 
-    match format_cli_input(input.trim_end(), opts.indent_width, use_color) {
+    match format_cli_input(input.trim_end(), opts.indent_width, use_color, opts.recover) {
         Ok(output) => println!("{output}"),
         Err(e) => {
             eprintln!("error: {e}");
+            eprintln!("hint: use --recover to best-effort format broken input");
             std::process::exit(1);
         }
     }
@@ -76,10 +78,13 @@ fn main() {
 
 /// CLI-specific formatting: handles multi-line input, dbg! prefix stripping,
 /// bracket validation, and multi-value splitting.
+/// When `recover` is enabled, bracket validation is skipped and broken
+/// bracket structure is best-effort repaired before formatting.
 fn format_cli_input(
     input: &str,
     indent_width: usize,
     colored: bool,
+    recover: bool,
 ) -> Result<String, FormatError> {
     let mut results = Vec::new();
 
@@ -91,10 +96,15 @@ fn format_cli_input(
 
         let (prefix, value) = strip_dbg_prefix(trimmed);
 
-        let column_offset = prefix.as_ref().map_or(0, |p| p.chars().count());
-        validate_brackets(value, line_idx + 1, column_offset)?;
+        if !recover {
+            let column_offset = prefix.as_ref().map_or(0, |p| p.chars().count());
+            validate_brackets(value, line_idx + 1, column_offset)?;
+        }
 
-        let tokens = dbgfmt::tokenize(value);
+        let mut tokens = dbgfmt::tokenize(value);
+        if recover {
+            tokens = recover_tokens(tokens);
+        }
         let groups = split_into_values(&tokens);
 
         for group in &groups {
@@ -220,6 +230,54 @@ fn validate_brackets(
     Ok(())
 }
 
+/// Best-effort recovery of broken bracket structure in a token stream.
+/// - Removes unexpected close brackets (no matching opener)
+/// - Fixes mismatched close brackets (replaces with correct closer)
+/// - Appends missing close brackets at the end
+fn recover_tokens(tokens: Vec<Token>) -> Vec<Token> {
+    let mut result = Vec::with_capacity(tokens.len());
+    let mut stack: Vec<Token> = Vec::new();
+
+    for token in tokens {
+        match &token {
+            Token::OpenBrace | Token::OpenBracket | Token::OpenParen => {
+                stack.push(token.clone());
+                result.push(token);
+            }
+            Token::CloseBrace | Token::CloseBracket | Token::CloseParen => {
+                if let Some(opener) = stack.last() {
+                    let expected_closer = match opener {
+                        Token::OpenBrace => Token::CloseBrace,
+                        Token::OpenBracket => Token::CloseBracket,
+                        Token::OpenParen => Token::CloseParen,
+                        _ => unreachable!(),
+                    };
+                    // Use the correct closer regardless of what was in the input
+                    result.push(expected_closer);
+                    stack.pop();
+                }
+                // If stack is empty, skip the orphan closer
+            }
+            _ => {
+                result.push(token);
+            }
+        }
+    }
+
+    // Close any remaining open brackets (in reverse order)
+    while let Some(opener) = stack.pop() {
+        let closer = match opener {
+            Token::OpenBrace => Token::CloseBrace,
+            Token::OpenBracket => Token::CloseBracket,
+            Token::OpenParen => Token::CloseParen,
+            _ => unreachable!(),
+        };
+        result.push(closer);
+    }
+
+    result
+}
+
 /// Split a token stream into separate values based on nesting depth.
 fn split_into_values(tokens: &[Token]) -> Vec<Vec<Token>> {
     if tokens.is_empty() {
@@ -272,6 +330,7 @@ fn parse_args() -> Result<Options, String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut indent_width: usize = 4;
     let mut color = ColorMode::Auto;
+    let mut recover = false;
     let mut positional = Vec::new();
     let mut i = 0;
 
@@ -303,6 +362,9 @@ fn parse_args() -> Result<Options, String> {
                 let val = args.get(i).ok_or("--color requires a value")?;
                 color = parse_color(val)?;
             }
+            "-r" | "--recover" => {
+                recover = true;
+            }
             arg if arg.starts_with("--indent=") => {
                 let val = &arg["--indent=".len()..];
                 indent_width = parse_indent(val)?;
@@ -325,6 +387,7 @@ fn parse_args() -> Result<Options, String> {
     Ok(Options {
         indent_width,
         color,
+        recover,
         input,
     })
 }
@@ -363,6 +426,7 @@ Arguments:
 Options:
   -i, --indent <N>     Indent width (default: 4)
       --color <WHEN>    Color output: auto, always, never (default: auto)
+  -r, --recover        Best-effort recovery of broken bracket structure
   -h, --help           Print help
   -V, --version        Print version"
     );
@@ -398,7 +462,7 @@ mod tests {
     #[test]
     fn format_dbg_output() {
         let input = "[src/main.rs:5:5] my_struct = Foo { bar: 1, baz: 2 }";
-        let output = format_cli_input(input, 4, false).unwrap();
+        let output = format_cli_input(input, 4, false, false).unwrap();
         assert_eq!(
             output,
             "[src/main.rs:5:5] my_struct = Foo {\n    bar: 1,\n    baz: 2,\n}"
@@ -408,7 +472,7 @@ mod tests {
     #[test]
     fn format_multiple_dbg_lines() {
         let input = "[src/main.rs:5:5] x = Foo { a: 1 }\n[src/main.rs:6:5] y = Bar { b: 2 }";
-        let output = format_cli_input(input, 4, false).unwrap();
+        let output = format_cli_input(input, 4, false, false).unwrap();
         assert_eq!(
             output,
             "[src/main.rs:5:5] x = Foo {\n    a: 1,\n}\n[src/main.rs:6:5] y = Bar {\n    b: 2,\n}"
@@ -418,7 +482,7 @@ mod tests {
     #[test]
     fn dbg_prefix_with_array() {
         let input = "[src/main.rs:5:5] items = [1, 2, 3]";
-        let output = format_cli_input(input, 4, false).unwrap();
+        let output = format_cli_input(input, 4, false, false).unwrap();
         assert_eq!(
             output,
             "[src/main.rs:5:5] items = [\n    1,\n    2,\n    3,\n]"
@@ -430,35 +494,35 @@ mod tests {
     #[test]
     fn multi_value_same_line() {
         let input = "Foo { x: 1 } Bar { y: 2 }";
-        let output = format_cli_input(input, 4, false).unwrap();
+        let output = format_cli_input(input, 4, false, false).unwrap();
         assert_eq!(output, "Foo {\n    x: 1,\n}\nBar {\n    y: 2,\n}");
     }
 
     #[test]
     fn multi_value_separate_lines() {
         let input = "Foo { x: 1 }\nBar { y: 2 }";
-        let output = format_cli_input(input, 4, false).unwrap();
+        let output = format_cli_input(input, 4, false, false).unwrap();
         assert_eq!(output, "Foo {\n    x: 1,\n}\nBar {\n    y: 2,\n}");
     }
 
     #[test]
     fn multi_value_bare_values() {
         let input = "42\nNone\n\"hello\"";
-        let output = format_cli_input(input, 4, false).unwrap();
+        let output = format_cli_input(input, 4, false, false).unwrap();
         assert_eq!(output, "42\nNone\n\"hello\"");
     }
 
     #[test]
     fn multi_value_bare_same_line() {
         let input = "Some(42) None";
-        let output = format_cli_input(input, 4, false).unwrap();
+        let output = format_cli_input(input, 4, false, false).unwrap();
         assert_eq!(output, "Some(42)\nNone");
     }
 
     #[test]
     fn multi_value_with_comma_separator() {
         let input = "Foo { x: 1 }, Bar { y: 2 }";
-        let output = format_cli_input(input, 4, false).unwrap();
+        let output = format_cli_input(input, 4, false, false).unwrap();
         assert_eq!(output, "Foo {\n    x: 1,\n}\nBar {\n    y: 2,\n}");
     }
 
@@ -466,7 +530,7 @@ mod tests {
 
     #[test]
     fn error_unclosed_brace() {
-        let err = format_cli_input("Foo { bar: 1", 4, false).unwrap_err();
+        let err = format_cli_input("Foo { bar: 1", 4, false, false).unwrap_err();
         assert_eq!(err.line, 1);
         assert_eq!(err.column, 5);
         assert!(err.message.contains("unclosed"));
@@ -474,7 +538,7 @@ mod tests {
 
     #[test]
     fn error_unexpected_close() {
-        let err = format_cli_input("Foo } bar", 4, false).unwrap_err();
+        let err = format_cli_input("Foo } bar", 4, false, false).unwrap_err();
         assert_eq!(err.line, 1);
         assert_eq!(err.column, 5);
         assert!(err.message.contains("unexpected"));
@@ -482,7 +546,7 @@ mod tests {
 
     #[test]
     fn error_mismatched_brackets() {
-        let err = format_cli_input("Foo { bar: 1 )", 4, false).unwrap_err();
+        let err = format_cli_input("Foo { bar: 1 )", 4, false, false).unwrap_err();
         assert_eq!(err.line, 1);
         assert_eq!(err.column, 14);
         assert!(err.message.contains("mismatched"));
@@ -490,14 +554,15 @@ mod tests {
 
     #[test]
     fn error_on_second_line() {
-        let err = format_cli_input("Foo { x: 1 }\nBar { y: 2", 4, false).unwrap_err();
+        let err = format_cli_input("Foo { x: 1 }\nBar { y: 2", 4, false, false).unwrap_err();
         assert_eq!(err.line, 2);
         assert!(err.message.contains("unclosed"));
     }
 
     #[test]
     fn error_column_offset_with_dbg_prefix() {
-        let err = format_cli_input("[src/main.rs:5:5] x = Foo { bar: 1", 4, false).unwrap_err();
+        let err =
+            format_cli_input("[src/main.rs:5:5] x = Foo { bar: 1", 4, false, false).unwrap_err();
         assert_eq!(err.line, 1);
         assert_eq!(err.column, 27);
         assert!(err.message.contains("unclosed"));
@@ -505,13 +570,131 @@ mod tests {
 
     #[test]
     fn empty_input() {
-        assert_eq!(format_cli_input("", 4, false).unwrap(), "");
+        assert_eq!(format_cli_input("", 4, false, false).unwrap(), "");
     }
 
     #[test]
     fn blank_lines_skipped() {
         let input = "Foo { x: 1 }\n\n\nBar { y: 2 }";
-        let output = format_cli_input(input, 4, false).unwrap();
+        let output = format_cli_input(input, 4, false, false).unwrap();
         assert_eq!(output, "Foo {\n    x: 1,\n}\nBar {\n    y: 2,\n}");
+    }
+
+    // === recover tests ===
+
+    #[test]
+    fn recover_unclosed_brace() {
+        let output = format_cli_input("Foo { bar: 1", 4, false, true).unwrap();
+        assert_eq!(output, "Foo {\n    bar: 1,\n}");
+    }
+
+    #[test]
+    fn recover_unclosed_nested() {
+        let output = format_cli_input("Foo { bar: Bar { x: 1", 4, false, true).unwrap();
+        assert_eq!(output, "Foo {\n    bar: Bar {\n        x: 1,\n    },\n}");
+    }
+
+    #[test]
+    fn recover_unexpected_close() {
+        let output = format_cli_input("Foo } bar", 4, false, true).unwrap();
+        assert_eq!(output, "Foo\nbar");
+    }
+
+    #[test]
+    fn recover_mismatched_bracket() {
+        let output = format_cli_input("Foo { bar: 1 )", 4, false, true).unwrap();
+        assert_eq!(output, "Foo {\n    bar: 1,\n}");
+    }
+
+    #[test]
+    fn recover_truncated_value() {
+        let output = format_cli_input("Foo { bar: Bar { x: 1, y:", 4, false, true).unwrap();
+        assert_eq!(
+            output,
+            "Foo {\n    bar: Bar {\n        x: 1,\n        y:,\n    },\n}"
+        );
+    }
+
+    #[test]
+    fn recover_extra_close_brackets() {
+        let output = format_cli_input("Foo { bar: 1 }}", 4, false, true).unwrap();
+        assert_eq!(output, "Foo {\n    bar: 1,\n}");
+    }
+
+    #[test]
+    fn recover_valid_input_unchanged() {
+        let output = format_cli_input("Foo { bar: 1, baz: 2 }", 4, false, true).unwrap();
+        assert_eq!(output, "Foo {\n    bar: 1,\n    baz: 2,\n}");
+    }
+
+    #[test]
+    fn recover_unclosed_bracket() {
+        let output = format_cli_input("[1, 2, 3", 4, false, true).unwrap();
+        assert_eq!(output, "[\n    1,\n    2,\n    3,\n]");
+    }
+
+    #[test]
+    fn recover_unclosed_paren() {
+        let output = format_cli_input("Some(42", 4, false, true).unwrap();
+        assert_eq!(output, "Some(42)");
+    }
+
+    #[test]
+    fn recover_multiline() {
+        let output = format_cli_input("Foo { x: 1 }\nBar { y: 2", 4, false, true).unwrap();
+        assert_eq!(output, "Foo {\n    x: 1,\n}\nBar {\n    y: 2,\n}");
+    }
+
+    // === recover_tokens unit tests ===
+
+    #[test]
+    fn recover_tokens_balanced() {
+        let tokens = dbgfmt::tokenize("Foo { bar: 1 }");
+        let recovered = recover_tokens(tokens.clone());
+        assert_eq!(recovered, tokens);
+    }
+
+    #[test]
+    fn recover_tokens_unclosed() {
+        let tokens = dbgfmt::tokenize("Foo { bar: 1");
+        let recovered = recover_tokens(tokens);
+        assert_eq!(
+            recovered,
+            vec![
+                Token::Text("Foo".into()),
+                Token::OpenBrace,
+                Token::Text("bar".into()),
+                Token::Colon,
+                Token::Text("1".into()),
+                Token::CloseBrace,
+            ]
+        );
+    }
+
+    #[test]
+    fn recover_tokens_orphan_closer() {
+        let tokens = dbgfmt::tokenize("Foo } bar");
+        let recovered = recover_tokens(tokens);
+        assert_eq!(
+            recovered,
+            vec![Token::Text("Foo".into()), Token::Text("bar".into()),]
+        );
+    }
+
+    #[test]
+    fn recover_tokens_mismatched() {
+        let tokens = dbgfmt::tokenize("Foo { bar: 1 )");
+        let recovered = recover_tokens(tokens);
+        assert_eq!(
+            recovered,
+            vec![
+                Token::Text("Foo".into()),
+                Token::OpenBrace,
+                Token::Text("bar".into()),
+                Token::Colon,
+                Token::Text("1".into()),
+                Token::CloseBrace,
+            ]
+        );
     }
 }

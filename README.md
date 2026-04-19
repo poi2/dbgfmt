@@ -85,6 +85,9 @@ echo '[src/main.rs:5:5] config = Config { host: "localhost", port: 8080 }' | dbg
 
 # Multiple values (separate lines or same line)
 printf 'Foo { x: 1 }\nBar { y: 2 }' | dbgfmt
+
+# Best-effort format broken/truncated input
+dbgfmt --recover 'Foo { bar: 1, baz: Bar { x:'
 ```
 
 ## License
