@@ -197,6 +197,75 @@ fn cli_color_never() {
 }
 
 #[test]
+fn cli_recover_unclosed_brace() {
+    let output = cargo_bin()
+        .args(["--recover", "Foo { bar: 1"])
+        .output()
+        .expect("failed to execute");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.trim(),
+        "\
+Foo {
+    bar: 1,
+}"
+    );
+}
+
+#[test]
+fn cli_recover_short_flag() {
+    let output = cargo_bin()
+        .args(["-r", "Foo { bar: Bar { x: 1"])
+        .output()
+        .expect("failed to execute");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.trim(),
+        "\
+Foo {
+    bar: Bar {
+        x: 1,
+    },
+}"
+    );
+}
+
+#[test]
+fn cli_recover_stdin() {
+    let mut child = cargo_bin()
+        .arg("--recover")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn");
+
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"[1, 2, 3")
+        .expect("failed to write");
+    drop(child.stdin.take());
+
+    let output = child.wait_with_output().expect("failed to wait");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.trim(),
+        "\
+[
+    1,
+    2,
+    3,
+]"
+    );
+}
+
+#[test]
 fn cli_no_input_shows_usage() {
     // stdin is not a pipe (default inherits terminal), and no args → should fail with usage
     let output = cargo_bin()
