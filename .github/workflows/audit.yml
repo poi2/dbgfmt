@@ -17,6 +17,14 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
-        with:
-          token: ${{ github.token }}
+      - name: Install cargo-audit
+        run: |
+          set -o pipefail
+          url="https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.1/cargo-audit-x86_64-unknown-linux-gnu-v0.22.1.tgz"
+          expected_sha="1890badd5f15831a9af4b074399fcd21e6f7c0fe42c84e9254cdffc9f813765c"
+          archive="$(mktemp)"
+          curl --fail --show-error --silent --location -o "$archive" "$url"
+          echo "$expected_sha  $archive" | sha256sum -c -
+          tar xz --strip-components=1 -C /usr/local/bin -f "$archive"
+      - name: Run audit
+        run: cargo audit
