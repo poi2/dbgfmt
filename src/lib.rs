@@ -2,8 +2,11 @@ mod color;
 mod formatter;
 mod tokenizer;
 
+#[doc(hidden)]
 pub use color::format_tokens_colored;
+#[doc(hidden)]
 pub use formatter::format_tokens;
+#[doc(hidden)]
 pub use tokenizer::{Token, tokenize};
 
 pub fn format_debug(input: &str, indent_width: usize) -> String {

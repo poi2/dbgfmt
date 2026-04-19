@@ -84,14 +84,14 @@ fn format_cli_input(
     let mut results = Vec::new();
 
     for (line_idx, line) in input.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
+        let trimmed = line.trim_end();
+        if trimmed.trim_start().is_empty() {
             continue;
         }
 
         let (prefix, value) = strip_dbg_prefix(trimmed);
 
-        let column_offset = prefix.as_ref().map_or(0, |p| p.len());
+        let column_offset = prefix.as_ref().map_or(0, |p| p.chars().count());
         validate_brackets(value, line_idx + 1, column_offset)?;
 
         let tokens = dbgfmt::tokenize(value);
@@ -145,7 +145,7 @@ fn validate_brackets(
     column_offset: usize,
 ) -> Result<(), FormatError> {
     let mut stack: Vec<(char, usize)> = Vec::new();
-    let mut chars = input.char_indices().peekable();
+    let mut chars = input.chars().enumerate().peekable();
 
     while let Some((col, ch)) = chars.next() {
         match ch {
