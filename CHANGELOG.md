@@ -9,8 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `dbg!()` macro output support: strip `[file:line:col] expr =` prefix and preserve it in formatted output.
+- Multi-value support: handle multiple Debug values in a single input.
+- Bracket validation with line/column error messages.
 - `--recover` (`-r`) option to best-effort format broken/truncated input.
 - Hint message suggesting `--recover` when bracket validation fails.
+- Security audit workflow for automated dependency vulnerability checking.
 
 ## [0.2.0] - 2025-05-01
 
