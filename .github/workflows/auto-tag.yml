@@ -14,15 +14,23 @@ jobs:
   auto-tag:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
       - name: Check version change
         id: version
         run: |
-          current=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          previous=$(git show HEAD~1:Cargo.toml | grep '^version' | head -1 | sed 's/.*"\(.*\)"/\1/')
+          current=$(python3 -c "
+          import tomllib, pathlib
+          data = tomllib.loads(pathlib.Path('Cargo.toml').read_text())
+          print(data['package']['version'])
+          ")
+          previous=$(git show HEAD~1:Cargo.toml | python3 -c "
+          import sys, tomllib
+          data = tomllib.loads(sys.stdin.read())
+          print(data['package']['version'])
+          ")
           echo "current=$current" >> "$GITHUB_OUTPUT"
           echo "previous=$previous" >> "$GITHUB_OUTPUT"
           if [ "$current" != "$previous" ]; then
@@ -35,5 +43,9 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         run: |
           tag="v${{ steps.version.outputs.current }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists on origin; skipping."
+            exit 0
+          fi
           git tag "$tag"
           git push origin "$tag"
